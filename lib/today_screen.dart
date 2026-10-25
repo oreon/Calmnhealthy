@@ -3,9 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'onboarding_screen.dart';
 import 'plan_library.dart';
 import 'plan_store.dart';
 import 'practice_catalog.dart';
+import 'profile.dart';
+import 'profile_store.dart';
 import 'session_engine.dart';
 import 'session_screen.dart';
 import 'session_store.dart';
@@ -66,6 +69,7 @@ class TodayScreen extends StatefulWidget {
 class _TodayScreenState extends State<TodayScreen> {
   bool _loading = true;
   bool _editing = false;
+  UserProfile _profile = UserProfile.defaults;
   int _lifetimePoints = 0;
   Set<String> _completedIds = <String>{};
   List<PlanTask> _tasks = List<PlanTask>.of(seedTasks);
@@ -81,13 +85,27 @@ class _TodayScreenState extends State<TodayScreen> {
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     final tasks = await PlanStore.loadPlan();
+    final profile = await ProfileStore.loadProfile();
     if (!mounted) return;
     setState(() {
       _tasks = tasks;
+      _profile = profile;
       _lifetimePoints = prefs.getInt(_lifetimePointsKey) ?? 0;
       _completedIds = (prefs.getStringList(_todayDoneKey) ?? []).toSet();
       _loading = false;
     });
+  }
+
+  /// Opens the profile in the onboarding flow's edit mode; when
+  /// the user saves, the greeting above reflects the new profile.
+  Future<void> _openProfile() async {
+    final saved = await Navigator.of(context).push<UserProfile>(
+      MaterialPageRoute<UserProfile>(
+        builder: (_) => OnboardingScreen(initial: _profile, editMode: true),
+      ),
+    );
+    if (saved == null || !mounted) return;
+    setState(() => _profile = saved);
   }
 
   Future<void> _savePlan() => PlanStore.savePlan(_tasks);
@@ -364,6 +382,10 @@ class _TodayScreenState extends State<TodayScreen> {
 
   Widget _buildHeader(ThemeData theme) {
     final gold = theme.colorScheme.secondary;
+    final now = DateTime.now();
+    final firstName = _profile.firstName;
+    final greeting =
+        '${greetingForHour(now.hour)}${firstName.isEmpty ? '' : ', $firstName'}';
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -379,7 +401,15 @@ class _TodayScreenState extends State<TodayScreen> {
               ),
               const SizedBox(height: 2),
               Text(
-                _formatDate(DateTime.now()),
+                greeting,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: gold,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                _formatDate(now),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -396,6 +426,11 @@ class _TodayScreenState extends State<TodayScreen> {
           side: BorderSide(color: gold.withValues(alpha: 0.5)),
         ),
         const SizedBox(width: 4),
+        IconButton(
+          icon: const Icon(Icons.person_outline),
+          tooltip: 'Your profile',
+          onPressed: _openProfile,
+        ),
         IconButton(
           icon: Icon(_editing ? Icons.check : Icons.edit_outlined),
           tooltip: _editing ? 'Done' : 'Configure your day',

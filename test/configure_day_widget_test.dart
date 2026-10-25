@@ -15,7 +15,7 @@ void main() {
     tester.view.physicalSize = const Size(1080, 3000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'cnh.onboarded': true});
 
     await tester.pumpWidget(const CalmNHealthyApp());
     await tester.pumpAndSettle();

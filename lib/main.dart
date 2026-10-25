@@ -6,6 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'exercise_tab.dart';
 import 'log_tab.dart';
 import 'meditate_tab.dart';
+import 'onboarding_screen.dart';
+import 'profile.dart';
+import 'profile_store.dart';
 import 'today_screen.dart';
 
 /// Deep teal brand seed (matches the Buddha icon background) and the
@@ -65,8 +68,83 @@ class CalmNHealthyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Calm n Healthy',
       theme: ThemeData(useMaterial3: true, colorScheme: colorScheme),
-      home: const HomeShell(),
+      home: const AppGate(),
     );
+  }
+}
+
+/// First-launch gate: shows the onboarding flow until it has been
+/// finished or skipped, then the shell. Startup state loads behind
+/// a brief brand splash, and any load failure fails OPEN — the
+/// shell with a default profile — so the gate can never lock the
+/// user out of the app.
+class AppGate extends StatefulWidget {
+  const AppGate({super.key});
+
+  @override
+  State<AppGate> createState() => _AppGateState();
+}
+
+class _AppGateState extends State<AppGate> {
+  bool _loading = true;
+  bool _onboarded = false;
+  UserProfile _profile = UserProfile.defaults;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    var onboarded = true; // Fail open if anything goes wrong.
+    var profile = UserProfile.defaults;
+    try {
+      profile = await ProfileStore.loadProfile();
+      onboarded = await ProfileStore.isOnboarded();
+    } catch (_) {
+      onboarded = true;
+    }
+    if (!mounted) return;
+    setState(() {
+      _profile = profile;
+      _onboarded = onboarded;
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      final theme = Theme.of(context);
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Calm n Healthy',
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 24),
+              const CircularProgressIndicator(),
+            ],
+          ),
+        ),
+      );
+    }
+    if (!_onboarded) {
+      return OnboardingScreen(
+        initial: _profile,
+        onComplete: (saved) => setState(() {
+          _profile = saved;
+          _onboarded = true;
+        }),
+      );
+    }
+    return const HomeShell();
   }
 }
 
