@@ -174,6 +174,11 @@ class SessionDraft {
   /// Skipped steps so far, as 'exerciseIndex:set' keys.
   final List<String> skippedKeys;
 
+  /// Soundtrack selected when the session started, relative to
+  /// `assets/`. Null records a deliberately silent session (and is
+  /// also the value for practices that never had a soundtrack).
+  final String? audioTrack;
+
   /// Local date (yyyy-MM-dd) the draft was saved.
   final String date;
 
@@ -184,6 +189,7 @@ class SessionDraft {
     this.set = 1,
     this.activeSeconds = 0,
     this.skippedKeys = const [],
+    this.audioTrack,
     required this.date,
   });
 
@@ -199,6 +205,11 @@ class SessionDraft {
     set: engine.set,
     activeSeconds: engine.activeSeconds,
     skippedKeys: engine.skippedKeys,
+    // Encode a silent meditation explicitly as '' so a later resume
+    // does not mistake it for a draft that predates stored tracks.
+    audioTrack:
+        engine.practice.audioTrack ??
+        (engine.practice.kind == PracticeKind.meditation ? '' : null),
     date: date,
   );
 
@@ -222,6 +233,7 @@ class SessionDraft {
     'set': set,
     'active_seconds': activeSeconds,
     'skipped': skippedKeys,
+    'audio_track': audioTrack,
     'date': date,
   };
 
@@ -244,6 +256,7 @@ class SessionDraft {
               ?.map((value) => value.toString())
               .toList() ??
           const [],
+      audioTrack: json['audio_track'] as String?,
       date: date,
     );
   }

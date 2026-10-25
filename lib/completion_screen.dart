@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import 'audio_service.dart';
 import 'practice_catalog.dart';
 import 'session_screen.dart' show formatClock;
 import 'session_store.dart';
@@ -35,7 +38,16 @@ class CompletionScreen extends StatefulWidget {
 class _CompletionScreenState extends State<CompletionScreen> {
   String _feeling = '';
   final TextEditingController _reflection = TextEditingController();
+  final AudioService _audioService = AudioService();
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // The service is created only now that a completion screen is
+    // actually showing; its guarded bell is best-effort.
+    unawaited(_audioService.playCompletionBell());
+  }
 
   @override
   void dispose() {

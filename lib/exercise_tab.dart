@@ -59,6 +59,7 @@ class _ExerciseTabState extends State<ExerciseTab> {
                 '${strength.steps.length} exercises · '
                 '${strength.steps.first.seconds}s work · '
                 '${strength.restSeconds}s rest · ${strength.sets} sets',
+            showStepThumbnails: true,
           ),
           const SizedBox(height: 12),
           _practiceCard(
@@ -88,6 +89,7 @@ class _ExerciseTabState extends State<ExerciseTab> {
     required PracticeDefinition practice,
     required String heading,
     required String meta,
+    bool showStepThumbnails = false,
   }) {
     return Card(
       child: Padding(
@@ -109,10 +111,13 @@ class _ExerciseTabState extends State<ExerciseTab> {
               ),
             ),
             const SizedBox(height: 8),
-            Text(
-              practice.steps.map((step) => step.name).join(' · '),
-              style: theme.textTheme.bodyMedium,
-            ),
+            if (showStepThumbnails)
+              _strengthStepList(theme, practice)
+            else
+              Text(
+                practice.steps.map((step) => step.name).join(' · '),
+                style: theme.textTheme.bodyMedium,
+              ),
             const SizedBox(height: 12),
             PracticeStartActions(
               practice: practice,
@@ -122,6 +127,51 @@ class _ExerciseTabState extends State<ExerciseTab> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _strengthStepList(ThemeData theme, PracticeDefinition practice) {
+    return Column(
+      children: [
+        for (var i = 0; i < practice.steps.length; i++) ...[
+          if (i > 0) const SizedBox(height: 8),
+          Row(
+            children: [
+              SizedBox(
+                width: 44,
+                height: 44,
+                child: practice.steps[i].imageAsset == null
+                    ? Icon(
+                        Icons.fitness_center,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      )
+                    : ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.asset(
+                          practice.steps[i].imageAsset!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              const SizedBox.shrink(),
+                        ),
+                      ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  practice.steps[i].name,
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
+              Text(
+                '${practice.steps[i].seconds}s',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
     );
   }
 }

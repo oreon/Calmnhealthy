@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'audio_service.dart';
 import 'completion_screen.dart';
 import 'practice_catalog.dart';
 import 'session_engine.dart';
@@ -32,6 +33,8 @@ class SessionScreen extends StatefulWidget {
 class _SessionScreenState extends State<SessionScreen> {
   late final SessionEngine _engine;
   late final String _sessionKey;
+  late final AudioService _audioService;
+  late final String? _audioTrack;
   Timer? _timer;
   bool _movedToCompletion = false;
 
@@ -39,15 +42,22 @@ class _SessionScreenState extends State<SessionScreen> {
   void initState() {
     super.initState();
     final draft = widget.draft;
-    if (draft != null && draft.practiceId == widget.practice.id) {
+    final usingDraft = draft != null && draft.practiceId == widget.practice.id;
+    if (usingDraft) {
       _engine = draft.toEngine(widget.practice);
       _sessionKey = draft.sessionKey;
+      _audioTrack = _trackFromDraft(draft);
     } else {
       _engine = SessionEngine(widget.practice);
       _sessionKey =
           '${widget.practice.id}:${cnhDateKey(DateTime.now())}:'
           '${DateTime.now().millisecondsSinceEpoch}';
+      _audioTrack = widget.practice.audioTrack;
     }
+    // Constructing the service here is safe: its platform player is
+    // not created until play() is called below, and never at startup.
+    _audioService = AudioService();
+    unawaited(_audioService.play(_audioTrack));
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       setState(() => _engine.tick());
@@ -56,19 +66,39 @@ class _SessionScreenState extends State<SessionScreen> {
     });
   }
 
+  String? _trackFromDraft(SessionDraft draft) {
+    // Drafts written by this version use '' for an explicitly silent
+    // meditation. Drafts written before audio was stored have no
+    // track and fall back to the practice's current selection.
+    if (draft.audioTrack == '') return null;
+    return draft.audioTrack ?? widget.practice.audioTrack;
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
-    if (!_movedToCompletion) _saveDraft();
+    if (!_movedToCompletion) {
+      _saveDraft();
+      unawaited(_audioService.stop());
+    }
     super.dispose();
   }
 
   Future<void> _saveDraft() async {
     if (_engine.isDone) return;
     await SessionStore.saveDraft(
-      SessionDraft.fromEngine(
-        _engine,
+      SessionDraft(
+        practiceId: _engine.practice.id,
         sessionKey: _sessionKey,
+        exerciseIndex: _engine.exerciseIndex,
+        set: _engine.set,
+        activeSeconds: _engine.activeSeconds,
+        skippedKeys: _engine.skippedKeys,
+        // Preserve an explicit Silent choice across a resume. Other
+        // trackless practices need no sentinel.
+        audioTrack:
+            _audioTrack ??
+            (widget.practice.kind == PracticeKind.meditation ? '' : null),
         date: cnhDateKey(DateTime.now()),
       ),
     );
@@ -78,6 +108,7 @@ class _SessionScreenState extends State<SessionScreen> {
     if (_movedToCompletion) return;
     _movedToCompletion = true;
     _timer?.cancel();
+    unawaited(_audioService.stop());
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
         builder: (_) => CompletionScreen(
@@ -96,6 +127,7 @@ class _SessionScreenState extends State<SessionScreen> {
     if (_engine.activeSeconds <= 0) {
       // Nothing practiced yet: abandon without a log entry, and drop
       // any draft so the tabs offer a clean start.
+      unawaited(_audioService.stop());
       SessionStore.clearDraft();
       Navigator.of(context).pop();
       return;
@@ -103,11 +135,27 @@ class _SessionScreenState extends State<SessionScreen> {
     _goToCompletion(endedEarly: true);
   }
 
+  void _togglePause() {
+    setState(() {
+      if (_engine.running) {
+        _engine.pause();
+        unawaited(_audioService.pause());
+        _saveDraft();
+      } else {
+        _engine.resume();
+        unawaited(_audioService.resume());
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final practice = widget.practice;
     final resting = _engine.isResting;
+    final imageAsset = resting
+        ? restPhaseImageAsset
+        : (_engine.currentStep.imageAsset ?? practice.imageAsset);
     return Scaffold(
       appBar: AppBar(title: Text(practice.title)),
       body: SafeArea(
@@ -131,6 +179,18 @@ class _SessionScreenState extends State<SessionScreen> {
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
+              if (imageAsset != null) ...[
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: 200,
+                  child: Image.asset(
+                    imageAsset,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) =>
+                        const SizedBox.shrink(),
+                  ),
+                ),
+              ],
               const Spacer(),
               Text(
                 formatClock(_engine.secondsRemaining),
@@ -174,14 +234,7 @@ class _SessionScreenState extends State<SessionScreen> {
                     label: const Text('End'),
                   ),
                   FilledButton.icon(
-                    onPressed: () => setState(() {
-                      if (_engine.running) {
-                        _engine.pause();
-                        _saveDraft();
-                      } else {
-                        _engine.resume();
-                      }
-                    }),
+                    onPressed: _togglePause,
                     icon: Icon(
                       _engine.running ? Icons.pause : Icons.play_arrow,
                     ),

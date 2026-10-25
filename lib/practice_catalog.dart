@@ -19,13 +19,51 @@ library;
 /// The family a practice belongs to (drives tab placement/labels).
 enum PracticeKind { strength, yoga, pranayama, meditation }
 
+/// Bundled image shown while meditating.
+const String meditationImageAsset = 'assets/images/meditation_image.jpg';
+
+/// Bundled image shown during every interval practice's rest phase.
+const String restPhaseImageAsset = 'assets/images/rest.jpg';
+
+/// Bundled practice-length audio tracks (paths are relative to the
+/// Flutter `assets/` directory, as audioplayers' AssetSource expects).
+const String workoutAudioTrack = 'sounds/workout.mp3';
+const String yogaAudioTrack = 'sounds/yoga.mp3';
+
+/// One selectable guided-meditation soundtrack. A null [audioTrack]
+/// means the meditation is intentionally silent.
+class GuidedTrackOption {
+  final String label;
+  final String? audioTrack;
+
+  const GuidedTrackOption(this.label, this.audioTrack);
+}
+
+/// Guided tracks offered beside the meditation duration presets,
+/// in display order.
+const List<GuidedTrackOption> guidedTrackOptions = [
+  GuidedTrackOption('Breath', 'sounds/breath.mp3'),
+  GuidedTrackOption('Body scan', 'sounds/bodyscan.m4a'),
+  GuidedTrackOption('Relax', 'sounds/relax.mp3'),
+  GuidedTrackOption('Silent', null),
+];
+
+/// The guided track selected until the user chooses another one.
+const GuidedTrackOption defaultGuidedTrack = GuidedTrackOption(
+  'Breath',
+  'sounds/breath.mp3',
+);
+
 /// One timed step inside a practice (an exercise, a pose, or a
 /// breathing practice).
 class PracticeStep {
   final String name;
   final int seconds;
 
-  const PracticeStep(this.name, this.seconds);
+  /// Bundled image to show during this step, when one exists.
+  final String? imageAsset;
+
+  const PracticeStep(this.name, this.seconds, {this.imageAsset});
 }
 
 /// A complete, runnable practice definition.
@@ -46,6 +84,14 @@ class PracticeDefinition {
 
   final String description;
 
+  /// Bundled image associated with the whole practice, when a
+  /// step-specific image is not the right representation.
+  final String? imageAsset;
+
+  /// Bundled practice-length soundtrack, relative to `assets/`.
+  /// Null means the practice runs silently.
+  final String? audioTrack;
+
   const PracticeDefinition({
     required this.id,
     required this.title,
@@ -55,6 +101,8 @@ class PracticeDefinition {
     required this.restSeconds,
     required this.unitLabel,
     required this.description,
+    this.imageAsset,
+    this.audioTrack,
   });
 
   /// Total planned work seconds (rests excluded).
@@ -82,6 +130,7 @@ const PracticeDefinition strengthUpper = PracticeDefinition(
   restSeconds: 15,
   unitLabel: 'Exercise',
   description: 'Push, plank and pull strength for the upper body.',
+  audioTrack: workoutAudioTrack,
 );
 
 /// Lower-body routine from the old app's content: six moves, 45/15 × 3.
@@ -90,17 +139,34 @@ const PracticeDefinition strengthLower = PracticeDefinition(
   title: 'Lower Body',
   kind: PracticeKind.strength,
   steps: [
-    PracticeStep('Squats', 45),
-    PracticeStep('Right Lunge', 45),
-    PracticeStep('Left Lunge', 45),
-    PracticeStep('Side Lunges Right', 45),
-    PracticeStep('Side Lunges Left', 45),
-    PracticeStep('Glute Bridge', 45),
+    PracticeStep('Squats', 45, imageAsset: 'assets/images/lower/squat.gif'),
+    PracticeStep(
+      'Right Lunge',
+      45,
+      imageAsset: 'assets/images/lower/lunge.gif',
+    ),
+    PracticeStep('Left Lunge', 45, imageAsset: 'assets/images/lower/lunge.gif'),
+    PracticeStep(
+      'Side Lunges Right',
+      45,
+      imageAsset: 'assets/images/lower/side_lunge.gif',
+    ),
+    PracticeStep(
+      'Side Lunges Left',
+      45,
+      imageAsset: 'assets/images/lower/side_lunge.gif',
+    ),
+    PracticeStep(
+      'Glute Bridge',
+      45,
+      imageAsset: 'assets/images/lower/glute_bridge.gif',
+    ),
   ],
   sets: 3,
   restSeconds: 15,
   unitLabel: 'Exercise',
   description: 'Squat, lunge and bridge strength for the lower body.',
+  audioTrack: workoutAudioTrack,
 );
 
 /// One-based day of the year for [date]: January 1 is day 1.
@@ -126,22 +192,57 @@ const PracticeDefinition yogaPractice = PracticeDefinition(
   title: 'Yoga',
   kind: PracticeKind.yoga,
   steps: [
-    PracticeStep('Downward Dog', 40),
-    PracticeStep('Plank', 20),
-    PracticeStep('Seated Forward Bend', 90),
-    PracticeStep('Cobblers Pose', 60),
-    PracticeStep('Seated Twist Right', 60),
-    PracticeStep('Seated Twist Left', 60),
-    PracticeStep('Bridge Pose', 90),
+    PracticeStep(
+      'Downward Dog',
+      40,
+      imageAsset: 'assets/images/yoga/downward-facingdog.png',
+    ),
+    PracticeStep('Plank', 20, imageAsset: 'assets/images/yoga/plankpose.png'),
+    PracticeStep(
+      'Seated Forward Bend',
+      90,
+      imageAsset: 'assets/images/yoga/seatedforward.jpg',
+    ),
+    PracticeStep(
+      'Cobblers Pose',
+      60,
+      imageAsset: 'assets/images/yoga/boundangle.jpg',
+    ),
+    PracticeStep(
+      'Seated Twist Right',
+      60,
+      imageAsset: 'assets/images/yoga/twist.jpg',
+    ),
+    PracticeStep(
+      'Seated Twist Left',
+      60,
+      imageAsset: 'assets/images/yoga/twist.jpg',
+    ),
+    PracticeStep(
+      'Bridge Pose',
+      90,
+      imageAsset: 'assets/images/yoga/bridgepose.png',
+    ),
+    // No Cobra image exists in the bundled media; the session UI
+    // deliberately handles this step's null image gracefully.
     PracticeStep('Cobra', 90),
-    PracticeStep('Shoulder stand', 180),
-    PracticeStep('Shavasana (corpse)', 180),
+    PracticeStep(
+      'Shoulder stand',
+      180,
+      imageAsset: 'assets/images/yoga/shoulderstand.png',
+    ),
+    PracticeStep(
+      'Shavasana (corpse)',
+      180,
+      imageAsset: 'assets/images/yoga/corpse-pose.jpg',
+    ),
   ],
   sets: 1,
   restSeconds: 3,
   unitLabel: 'Pose',
   description:
       'Yoga is great for flexibility and mobility — feel calmer and well rested.',
+  audioTrack: yogaAudioTrack,
 );
 
 /// The old app's pranayama sequence: five timed breathing practices.
@@ -166,7 +267,13 @@ const PracticeDefinition pranayamaPractice = PracticeDefinition(
 const List<int> meditationPresetMinutes = [5, 10, 20, 30, 45];
 
 /// Builds the single-step meditation practice for a preset length.
-PracticeDefinition meditationPractice(int minutes) => PracticeDefinition(
+///
+/// Breath is the default guided soundtrack. Pass another track from
+/// [guidedTrackOptions], including null for a silent meditation.
+PracticeDefinition meditationPractice(
+  int minutes, {
+  String? audioTrack = 'sounds/breath.mp3',
+}) => PracticeDefinition(
   id: 'meditation-$minutes',
   title: 'Meditation $minutes min',
   kind: PracticeKind.meditation,
@@ -175,6 +282,8 @@ PracticeDefinition meditationPractice(int minutes) => PracticeDefinition(
   restSeconds: 0,
   unitLabel: 'Step',
   description: 'Sit comfortably and rest attention on the breath.',
+  imageAsset: meditationImageAsset,
+  audioTrack: audioTrack,
 );
 
 /// Every fixed (non-alternating, non-preset) practice, by id.

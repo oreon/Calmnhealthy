@@ -15,6 +15,7 @@ class MeditateTab extends StatefulWidget {
 
 class _MeditateTabState extends State<MeditateTab> {
   int _selectedMinutes = 10;
+  int _selectedTrackIndex = 0;
   SessionDraft? _draft;
 
   @override
@@ -39,7 +40,10 @@ class _MeditateTabState extends State<MeditateTab> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final practice = meditationPractice(_selectedMinutes);
+    final practice = meditationPractice(
+      _selectedMinutes,
+      audioTrack: guidedTrackOptions[_selectedTrackIndex].audioTrack,
+    );
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -48,6 +52,20 @@ class _MeditateTabState extends State<MeditateTab> {
             'Meditate',
             style: theme.textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: SizedBox(
+              height: 180,
+              width: double.infinity,
+              child: Image.asset(
+                meditationImageAsset,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) =>
+                    const SizedBox.shrink(),
+              ),
             ),
           ),
           const SizedBox(height: 8),
@@ -81,6 +99,26 @@ class _MeditateTabState extends State<MeditateTab> {
                           selected: _selectedMinutes == minutes,
                           onSelected: (_) =>
                               setState(() => _selectedMinutes = minutes),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Guided track',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      for (var i = 0; i < guidedTrackOptions.length; i++)
+                        ChoiceChip(
+                          label: Text(guidedTrackOptions[i].label),
+                          selected: _selectedTrackIndex == i,
+                          onSelected: (_) =>
+                              setState(() => _selectedTrackIndex = i),
                         ),
                     ],
                   ),
