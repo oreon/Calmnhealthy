@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'exercise_tab.dart';
+import 'log_tab.dart';
+import 'meditate_tab.dart';
 import 'today_screen.dart';
 
 /// Deep teal brand seed (matches the Buddha icon background) and the
@@ -50,20 +53,18 @@ class CalmNHealthyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: brandTeal,
-      brightness: Brightness.dark,
-    ).copyWith(
-      secondary: brandGold,
-      tertiary: brandGold,
-      onSecondary: Colors.black,
-    );
+    final colorScheme =
+        ColorScheme.fromSeed(
+          seedColor: brandTeal,
+          brightness: Brightness.dark,
+        ).copyWith(
+          secondary: brandGold,
+          tertiary: brandGold,
+          onSecondary: Colors.black,
+        );
     return MaterialApp(
       title: 'Calm n Healthy',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: colorScheme,
-      ),
+      theme: ThemeData(useMaterial3: true, colorScheme: colorScheme),
       home: const HomeShell(),
     );
   }
@@ -82,26 +83,15 @@ class _HomeShellState extends State<HomeShell> {
 
   static const List<Widget> _tabs = [
     TodayScreen(),
-    PlaceholderTab(
-      title: 'Exercise',
-      icon: Icons.fitness_center,
-      line: 'Strength, yoga and cardio sessions arrive in the next milestones.',
-    ),
-    PlaceholderTab(
-      title: 'Meditate',
-      icon: Icons.self_improvement,
-      line: 'Meditation, pranayama and Buteyko arrive in the next milestones.',
-    ),
+    ExerciseTab(),
+    MeditateTab(),
     PlaceholderTab(
       title: 'Diet',
       icon: Icons.restaurant,
-      line: 'Food snapshots and the eating window arrive in the next milestones.',
+      line:
+          'Food snapshots and the eating window arrive in the next milestones.',
     ),
-    PlaceholderTab(
-      title: 'Log',
-      icon: Icons.menu_book,
-      line: 'Your practice history arrives in the next milestones.',
-    ),
+    LogTab(),
   ];
 
   @override
@@ -186,8 +176,9 @@ class PlaceholderTab extends StatelessWidget {
                   Text(
                     line,
                     textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
