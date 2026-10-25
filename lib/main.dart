@@ -1,122 +1,201 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
-void main() {
-  runApp(const MyApp());
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'today_screen.dart';
+
+/// Deep teal brand seed (matches the Buddha icon background) and the
+/// warm gold used for points/highlights.
+const Color brandTeal = Color(0xFF00484D);
+const Color brandGold = Color(0xFFC9A227);
+
+/// SharedPreferences key the guarded startup writes the last caught
+/// error to, so a failure is recorded instead of taking the app down.
+const String lastErrorKey = 'cnh.last_error';
+
+Future<void> _recordError(Object error, StackTrace stack) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      lastErrorKey,
+      '${DateTime.now().toIso8601String()}\n$error\n$stack',
+    );
+  } catch (_) {
+    // Error recording is best-effort; it must never crash either.
+  }
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+void main() {
+  runZonedGuarded(
+    () {
+      WidgetsFlutterBinding.ensureInitialized();
+      FlutterError.onError = (details) {
+        _recordError(details.exception, details.stack ?? StackTrace.empty);
+      };
+      WidgetsBinding.instance.platformDispatcher.onError = (error, stack) {
+        _recordError(error, stack);
+        return true; // Recorded, not fatal.
+      };
+      runApp(const CalmNHealthyApp());
+    },
+    (error, stack) {
+      _recordError(error, stack);
+    },
+  );
+}
 
-  // This widget is the root of your application.
+class CalmNHealthyApp extends StatelessWidget {
+  const CalmNHealthyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
+    final colorScheme = ColorScheme.fromSeed(
+      seedColor: brandTeal,
+      brightness: Brightness.dark,
+    ).copyWith(
+      secondary: brandGold,
+      tertiary: brandGold,
+      onSecondary: Colors.black,
+    );
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Calm n Healthy',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        useMaterial3: true,
+        colorScheme: colorScheme,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const HomeShell(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+/// Bottom-navigation shell with the five tabs.
+class HomeShell extends StatefulWidget {
+  const HomeShell({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<HomeShell> createState() => _HomeShellState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _HomeShellState extends State<HomeShell> {
+  int _selectedIndex = 0;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
+  static const List<Widget> _tabs = [
+    TodayScreen(),
+    PlaceholderTab(
+      title: 'Exercise',
+      icon: Icons.fitness_center,
+      line: 'Strength, yoga and cardio sessions arrive in the next milestones.',
+    ),
+    PlaceholderTab(
+      title: 'Meditate',
+      icon: Icons.self_improvement,
+      line: 'Meditation, pranayama and Buteyko arrive in the next milestones.',
+    ),
+    PlaceholderTab(
+      title: 'Diet',
+      icon: Icons.restaurant,
+      line: 'Food snapshots and the eating window arrive in the next milestones.',
+    ),
+    PlaceholderTab(
+      title: 'Log',
+      icon: Icons.menu_book,
+      line: 'Your practice history arrives in the next milestones.',
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+      body: IndexedStack(index: _selectedIndex, children: _tabs),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: (index) =>
+            setState(() => _selectedIndex = index),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.today_outlined),
+            selectedIcon: Icon(Icons.today),
+            label: 'Today',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.fitness_center_outlined),
+            selectedIcon: Icon(Icons.fitness_center),
+            label: 'Exercise',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.self_improvement_outlined),
+            selectedIcon: Icon(Icons.self_improvement),
+            label: 'Meditate',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.restaurant_outlined),
+            selectedIcon: Icon(Icons.restaurant),
+            label: 'Diet',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.menu_book_outlined),
+            selectedIcon: Icon(Icons.menu_book),
+            label: 'Log',
+          ),
+        ],
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
+    );
+  }
+}
+
+/// Honest placeholder for a tab whose features arrive in later
+/// milestones: brand header, the tab name, and one truthful line.
+class PlaceholderTab extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final String line;
+
+  const PlaceholderTab({
+    super.key,
+    required this.title,
+    required this.icon,
+    required this.line,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
         child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+              'Calm n Healthy',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.bold,
+              ),
             ),
+            const Spacer(),
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 56, color: theme.colorScheme.secondary),
+                  const SizedBox(height: 16),
+                  Text(title, style: theme.textTheme.headlineSmall),
+                  const SizedBox(height: 8),
+                  Text(
+                    line,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+            const Spacer(),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }

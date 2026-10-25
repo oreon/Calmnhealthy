@@ -1,30 +1,53 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
+// Widget tests for the Calm n Healthy M1 shell and Today plan.
 
 import 'package:calm_n_healthy/main.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('Today shows the seeded plan; checking a task awards 10 points',
+      (tester) async {
+    // Tall viewport so the whole seeded plan is built without scrolling.
+    tester.view.physicalSize = const Size(1080, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    SharedPreferences.setMockInitialValues({});
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    await tester.pumpWidget(const CalmNHealthyApp());
+    await tester.pumpAndSettle();
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    // Brand header and points chip at zero.
+    expect(find.text('Calm n Healthy'), findsWidgets);
+    expect(find.text('0 pts'), findsOneWidget);
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Seeded tasks from each section are present in the list.
+    expect(find.text('Water'), findsOneWidget);
+    expect(find.text('Meditation'), findsOneWidget);
+    expect(find.text('Turn phone off'), findsOneWidget);
+
+    // Check the first task (Water) and see the points increase by 10.
+    await tester.tap(find.byType(Checkbox).first);
+    await tester.pumpAndSettle();
+    expect(find.text('10 pts'), findsOneWidget);
+
+    // Unchecking removes the award again.
+    await tester.tap(find.byType(Checkbox).first);
+    await tester.pumpAndSettle();
+    expect(find.text('0 pts'), findsOneWidget);
+  });
+
+  testWidgets('Impulse button opens the Milestone 3 dialog', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(const CalmNHealthyApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Before eating'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Milestone 3'), findsOneWidget);
   });
 }
