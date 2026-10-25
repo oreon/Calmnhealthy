@@ -9,6 +9,7 @@ import 'plan_store.dart';
 import 'practice_catalog.dart';
 import 'profile.dart';
 import 'profile_store.dart';
+import 'reminder_service.dart';
 import 'session_engine.dart';
 import 'session_screen.dart';
 import 'session_store.dart';
@@ -69,6 +70,7 @@ class TodayScreen extends StatefulWidget {
 class _TodayScreenState extends State<TodayScreen> {
   bool _loading = true;
   bool _editing = false;
+  bool _remindersEnabled = true;
   UserProfile _profile = UserProfile.defaults;
   int _lifetimePoints = 0;
   Set<String> _completedIds = <String>{};
@@ -90,6 +92,7 @@ class _TodayScreenState extends State<TodayScreen> {
     setState(() {
       _tasks = tasks;
       _profile = profile;
+      _remindersEnabled = prefs.getBool(remindersEnabledKey) ?? true;
       _lifetimePoints = prefs.getInt(_lifetimePointsKey) ?? 0;
       _completedIds = (prefs.getStringList(_todayDoneKey) ?? []).toSet();
       _loading = false;
@@ -108,7 +111,32 @@ class _TodayScreenState extends State<TodayScreen> {
     setState(() => _profile = saved);
   }
 
-  Future<void> _savePlan() => PlanStore.savePlan(_tasks);
+  Future<void> _savePlan() async {
+    await PlanStore.savePlan(_tasks);
+    // Every Configure-your-day edit saves through here, so the
+    // day's reminders follow the new template immediately.
+    unawaited(ReminderService.instance.rescheduleAll(_tasks));
+  }
+
+  /// The header bell: turns task reminders on or off. Turning on
+  /// requests the notification permission and schedules the day;
+  /// turning off cancels everything. Both go through the guarded
+  /// reminder service, fire-and-forget.
+  void _toggleReminders() {
+    final next = !_remindersEnabled;
+    setState(() => _remindersEnabled = next);
+    unawaited(ReminderService.instance.setEnabled(next));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          next
+              ? 'Task reminders on — one nudge at each task time.'
+              : 'Task reminders off.',
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
 
   Future<void> _toggle(PlanTask task, bool complete) async {
     final outcome = toggleTask(
@@ -357,6 +385,8 @@ class _TodayScreenState extends State<TodayScreen> {
     );
     if (confirmed != true || !mounted) return;
     await PlanStore.resetToDefaults();
+    // Reminders follow the restored default day too.
+    unawaited(ReminderService.instance.syncReminders());
     if (!mounted) return;
     setState(() => _tasks = List<PlanTask>.of(seedTasks));
     ScaffoldMessenger.of(context).showSnackBar(
@@ -426,6 +456,17 @@ class _TodayScreenState extends State<TodayScreen> {
           side: BorderSide(color: gold.withValues(alpha: 0.5)),
         ),
         const SizedBox(width: 4),
+        IconButton(
+          icon: Icon(
+            _remindersEnabled
+                ? Icons.notifications_outlined
+                : Icons.notifications_off_outlined,
+          ),
+          tooltip: _remindersEnabled
+              ? 'Task reminders on — tap to turn off'
+              : 'Task reminders off — tap to turn on',
+          onPressed: _toggleReminders,
+        ),
         IconButton(
           icon: const Icon(Icons.person_outline),
           tooltip: 'Your profile',

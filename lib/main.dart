@@ -9,6 +9,7 @@ import 'meditate_tab.dart';
 import 'onboarding_screen.dart';
 import 'profile.dart';
 import 'profile_store.dart';
+import 'reminder_service.dart';
 import 'today_screen.dart';
 
 /// Deep teal brand seed (matches the Buddha icon background) and the
@@ -158,6 +159,19 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Task reminders sync once the shell is on screen — both when
+    // onboarding has just completed and on every later app start.
+    // Post-first-frame and fire-and-forget: the guarded service
+    // initializes the notifications plugin lazily here, never on
+    // startup's critical path, and any failure stays silent.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(ReminderService.instance.syncReminders());
+    });
+  }
 
   static const List<Widget> _tabs = [
     TodayScreen(),
