@@ -62,7 +62,9 @@ void main() {
     expect(find.text('Pranayama'), findsOneWidget);
   });
 
-  testWidgets('Impulse button opens the Milestone 3 dialog', (tester) async {
+  testWidgets('Before eating opens the mindful-eating start sheet', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1080, 2600);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -73,6 +75,10 @@ void main() {
 
     await tester.tap(find.text('Before eating'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Milestone 3'), findsOneWidget);
+    // The start sheet offers the mindful-eating lengths (v2.4.0
+    // replaced the 'arrives in Milestone 3' placeholder dialog).
+    expect(find.text('Mindful eating'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, '10 min'), findsOneWidget);
+    expect(find.textContaining('Milestone 3'), findsNothing);
   });
 }

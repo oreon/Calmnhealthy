@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'breathing.dart';
+import 'breathing_screen.dart';
 import 'practice_catalog.dart';
 import 'practice_start.dart';
 import 'session_engine.dart';
@@ -132,10 +134,21 @@ class _MeditateTabState extends State<MeditateTab> {
               ),
             ),
           ),
+          const SizedBox(height: 20),
+          Text(
+            'Breathing',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const BreathingPatternCard(pattern: boxBreathingPattern),
+          const SizedBox(height: 12),
+          const BreathingPatternCard(pattern: fourSevenEightPattern),
           const SizedBox(height: 12),
           Text(
-            'Buteyko breathing and strong-emotion support arrive in '
-            'Milestone 3.',
+            'Buteyko and strong-emotion support arrive in a later '
+            'milestone.',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),

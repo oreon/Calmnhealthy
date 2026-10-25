@@ -129,6 +129,16 @@ const List<PlanLibraryEntry> planLibrary = [
     name: 'Box breathing',
     category: PlanCategory.breathe,
     defaultTime: '14:00',
+    kind: PlanTaskKind.practice,
+    practiceId: 'box-breathing',
+  ),
+  PlanLibraryEntry(
+    id: 'breathing-4-7-8',
+    name: '4-7-8 breathing',
+    category: PlanCategory.breathe,
+    defaultTime: '20:10',
+    kind: PlanTaskKind.practice,
+    practiceId: 'breathing-4-7-8',
   ),
   // Daily habits.
   PlanLibraryEntry(

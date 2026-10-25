@@ -1,5 +1,6 @@
 // Configure Your Day: plan template model, library and persistence.
 
+import 'package:calm_n_healthy/breathing.dart';
 import 'package:calm_n_healthy/plan_library.dart';
 import 'package:calm_n_healthy/plan_store.dart';
 import 'package:calm_n_healthy/practice_catalog.dart';
@@ -42,11 +43,13 @@ void main() {
       expect(byId('yoga').practiceId, 'yoga');
     });
 
-    test('yoga nidra and box breathing stay simple (no session yet)', () {
+    test('yoga nidra stays simple; box breathing links to its pattern', () {
       expect(byId('yoga-nidra').kind, PlanTaskKind.simple);
       expect(byId('yoga-nidra').practiceId, isNull);
-      expect(byId('box-breathing').kind, PlanTaskKind.simple);
-      expect(byId('box-breathing').practiceId, isNull);
+      // Since v2.4.0 box breathing has a real session (the pacer),
+      // so the seed task is a practice row like the others.
+      expect(byId('box-breathing').kind, PlanTaskKind.practice);
+      expect(byId('box-breathing').practiceId, 'box-breathing');
     });
 
     test('every seeded practice link resolves to a real practice', () {
@@ -55,7 +58,8 @@ void main() {
       )) {
         expect(
           task.practiceId == strengthPracticeLink ||
-              practiceById(task.practiceId!) != null,
+              practiceById(task.practiceId!) != null ||
+              breathingPatternById(task.practiceId!) != null,
           isTrue,
           reason: '${task.id} links to ${task.practiceId}',
         );

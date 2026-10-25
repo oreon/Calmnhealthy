@@ -286,6 +286,30 @@ PracticeDefinition meditationPractice(
   audioTrack: audioTrack,
 );
 
+/// Bundled pre-meal guided audio — the mindful-eating soundtrack.
+const String mindfulEatingAudioTrack = 'sounds/pre-meals.mp3';
+
+/// Mindful-eating session lengths, in minutes.
+const List<int> mindfulEatingPresetMinutes = [5, 10, 15, 20];
+
+/// Builds the single-step mindful-eating practice for a length.
+/// The guided pre-meal audio plays for the session; the title is
+/// exactly 'Mindful eating' so the completion log records that
+/// kind. Kind is meditation: it is a seated, guided, single-step
+/// practice and shares meditation's draft/audio handling.
+PracticeDefinition mindfulEatingPractice(int minutes) => PracticeDefinition(
+  id: 'mindful-eating-$minutes',
+  title: 'Mindful eating',
+  kind: PracticeKind.meditation,
+  steps: [PracticeStep('Mindful eating', minutes * 60)],
+  sets: 1,
+  restSeconds: 0,
+  unitLabel: 'Step',
+  description:
+      'Eat slowly, one bite at a time, following the guided audio.',
+  audioTrack: mindfulEatingAudioTrack,
+);
+
 /// Every fixed (non-alternating, non-preset) practice, by id.
 final Map<String, PracticeDefinition> _fixedPractices = {
   for (final practice in [
@@ -306,6 +330,12 @@ PracticeDefinition? practiceById(String id) {
     final minutes = int.tryParse(id.substring('meditation-'.length));
     if (minutes != null && meditationPresetMinutes.contains(minutes)) {
       return meditationPractice(minutes);
+    }
+  }
+  if (id.startsWith('mindful-eating-')) {
+    final minutes = int.tryParse(id.substring('mindful-eating-'.length));
+    if (minutes != null && mindfulEatingPresetMinutes.contains(minutes)) {
+      return mindfulEatingPractice(minutes);
     }
   }
   return null;

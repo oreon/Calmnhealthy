@@ -138,7 +138,13 @@ const List<PlanTask> seedTasks = [
   PlanTask(id: 'mindful-breakfast', name: 'Mindful breakfast', time: '08:00'),
   PlanTask(id: 'yoga-nidra', name: 'Yoga Nidra', time: '12:00'),
   PlanTask(id: 'mindful-lunch', name: 'Mindful lunch', time: '13:30'),
-  PlanTask(id: 'box-breathing', name: 'Box breathing', time: '14:00'),
+  PlanTask(
+    id: 'box-breathing',
+    name: 'Box breathing',
+    time: '14:00',
+    kind: PlanTaskKind.practice,
+    practiceId: 'box-breathing',
+  ),
   PlanTask(id: 'fluid-reminder', name: 'Fluid reminder', time: '15:00'),
   PlanTask(
     id: 'evening-meditation',

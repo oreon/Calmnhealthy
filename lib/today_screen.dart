@@ -3,10 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'breathing.dart';
+import 'breathing_screen.dart';
 import 'onboarding_screen.dart';
 import 'plan_library.dart';
 import 'plan_store.dart';
 import 'practice_catalog.dart';
+import 'practice_start.dart';
 import 'profile.dart';
 import 'profile_store.dart';
 import 'reminder_service.dart';
@@ -170,6 +173,34 @@ class _TodayScreenState extends State<TodayScreen> {
     );
   }
 
+  /// 'Before eating' opens the mindful-eating start sheet; the
+  /// guided session (and its Save) happens inside it. Reload
+  /// afterwards so points earned eating mindfully show up here.
+  Future<void> _openMindfulEating() async {
+    await showMindfulEatingStartSheet(context);
+    if (!mounted) return;
+    await _load();
+  }
+
+  /// 'Before scrolling' starts a one-minute box-breathing session
+  /// immediately — the original impulse design: one minute of
+  /// breath now protects the life you are building.
+  Future<void> _openImpulseBreathing() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const BreathingScreen(
+          pattern: boxBreathingPattern,
+          autoStartSeconds: 60,
+          introLine:
+              'One minute of breath now protects the life you are '
+              'building from a moment of shallow pleasure.',
+        ),
+      ),
+    );
+    if (!mounted) return;
+    await _load();
+  }
+
   // --- Practice launch ----------------------------------------------
 
   /// The practice a task's play button opens. The 'strength' link
@@ -186,6 +217,22 @@ class _TodayScreenState extends State<TodayScreen> {
   }
 
   Future<void> _openPractice(PlanTask task) async {
+    // Breathing links ('box-breathing', 'breathing-4-7-8') open
+    // the breathing pacer, not a catalog session.
+    final link = task.practiceId;
+    if (task.kind == PlanTaskKind.practice && link != null) {
+      final pattern = breathingPatternById(link);
+      if (pattern != null) {
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => BreathingScreen(pattern: pattern),
+          ),
+        );
+        if (!mounted) return;
+        await _load();
+        return;
+      }
+    }
     final practice = _practiceFor(task);
     if (practice == null) return;
     var draft = await SessionStore.loadDraft(cnhDateKey(DateTime.now()));
@@ -638,22 +685,14 @@ class _TodayScreenState extends State<TodayScreen> {
               children: [
                 Expanded(
                   child: FilledButton.tonal(
-                    onPressed: () => _showMilestone3(
-                      'Before eating',
-                      'The one-minute breathing pause before eating '
-                          'arrives in Milestone 3.',
-                    ),
+                    onPressed: () => _openMindfulEating(),
                     child: const Text('Before eating'),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton.tonal(
-                    onPressed: () => _showMilestone3(
-                      'Before scrolling',
-                      'The one-minute breathing pause before scrolling '
-                          'arrives in Milestone 3.',
-                    ),
+                    onPressed: () => _openImpulseBreathing(),
                     child: const Text('Before scrolling'),
                   ),
                 ),

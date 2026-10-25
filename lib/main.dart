@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'diet_tab.dart';
 import 'exercise_tab.dart';
 import 'log_tab.dart';
 import 'meditate_tab.dart';
@@ -177,12 +178,7 @@ class _HomeShellState extends State<HomeShell> {
     TodayScreen(),
     ExerciseTab(),
     MeditateTab(),
-    PlaceholderTab(
-      title: 'Diet',
-      icon: Icons.restaurant,
-      line:
-          'Food snapshots and the eating window arrive in the next milestones.',
-    ),
+    DietTab(),
     LogTab(),
   ];
 
