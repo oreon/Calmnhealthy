@@ -67,6 +67,7 @@ flutter:
     - assets/sounds/
     - assets/images/
     - assets/images/lower/
+    - assets/images/upper/
     - assets/images/yoga/
 
   # To add assets to your application, add an assets section, like this:

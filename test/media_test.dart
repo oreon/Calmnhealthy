@@ -51,11 +51,14 @@ void main() {
       expect(strengthLower.audioTrack, workoutAudioTrack);
     });
 
-    test('Upper defers its images but uses the workout track', () {
-      expect(
-        strengthUpper.steps.every((step) => step.imageAsset == null),
-        isTrue,
-      );
+    test('every Upper step has its bundled movement image', () {
+      expect(strengthUpper.steps.map((step) => step.imageAsset).toList(), [
+        'assets/images/upper/pushups.gif',
+        'assets/images/upper/plank_ups.gif',
+        'assets/images/upper/plank_to_dolphin.gif',
+        'assets/images/upper/superman.webp',
+        'assets/images/upper/plank.webp',
+      ]);
       expect(strengthUpper.audioTrack, workoutAudioTrack);
     });
 

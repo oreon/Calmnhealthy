@@ -137,6 +137,26 @@ void main() {
       expect(engine.isDone, isTrue);
     });
 
+    test('advance applies screen-off time at once, capped at target', () {
+      final engine = BreathingEngine(boxBreathingPattern, totalSeconds: 60);
+      engine.advance(30);
+      expect(engine.activeSeconds, 30);
+      engine.advance(999);
+      expect(engine.activeSeconds, 60);
+      expect(engine.isDone, isTrue);
+    });
+
+    test('advance while paused counts nothing', () {
+      final engine = BreathingEngine(boxBreathingPattern, totalSeconds: 60);
+      engine.advance(5);
+      engine.pause();
+      engine.advance(30);
+      expect(engine.activeSeconds, 5);
+      engine.resume();
+      engine.advance(5);
+      expect(engine.activeSeconds, 10);
+    });
+
     test('points follow the app rule and cap at 120', () {
       final engine = BreathingEngine(boxBreathingPattern, totalSeconds: 7200);
       expect(engine.pointsEarned, 0);

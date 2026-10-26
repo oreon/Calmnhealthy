@@ -80,6 +80,38 @@ void main() {
     });
   });
 
+  group('wall-clock advance (screen-off catch-up)', () {
+    test('advance matches one-second ticks across phases', () {
+      final ticked = SessionEngine(strengthUpper);
+      final advanced = SessionEngine(strengthUpper);
+      tickSeconds(ticked, 200);
+      advanced.advance(200);
+      expect(advanced.activeSeconds, ticked.activeSeconds);
+      expect(advanced.phase, ticked.phase);
+      expect(advanced.exerciseIndex, ticked.exerciseIndex);
+      expect(advanced.secondsRemaining, ticked.secondsRemaining);
+    });
+
+    test('advance while paused counts nothing', () {
+      final engine = SessionEngine(strengthUpper);
+      engine.advance(10);
+      engine.pause();
+      engine.advance(600);
+      expect(engine.activeSeconds, 10);
+      engine.resume();
+      engine.advance(5);
+      expect(engine.activeSeconds, 15);
+    });
+
+    test('advancing past the end finishes with honest totals', () {
+      final engine = SessionEngine(strengthUpper);
+      engine.advance(100000);
+      expect(engine.isDone, isTrue);
+      // Only real work counts: 5 exercises x 45s x 3 sets.
+      expect(engine.activeSeconds, 675);
+    });
+  });
+
   group('strength alternation', () {
     test('odd day-of-year is Upper, even is Lower', () {
       expect(dayOfYear(DateTime(2026, 1, 1)), 1);

@@ -86,22 +86,31 @@ class BreathingScreen extends StatefulWidget {
   State<BreathingScreen> createState() => _BreathingScreenState();
 }
 
-class _BreathingScreenState extends State<BreathingScreen> {
+class _BreathingScreenState extends State<BreathingScreen>
+    with WidgetsBindingObserver {
   int _selectedMinutes = 3;
   BreathingEngine? _engine;
   late String _sessionKey;
   Timer? _timer;
   bool _movedToCompletion = false;
 
+  /// Wall-clock moment the engine was last advanced to. Android
+  /// pauses the periodic timer while the screen is off, so elapsed
+  /// time is derived from the clock and applied via
+  /// [BreathingEngine.advance] — breathed time is never stalled.
+  DateTime _lastAdvance = DateTime.now();
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final auto = widget.autoStartSeconds;
     if (auto != null) _start(auto);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     super.dispose();
   }
@@ -111,11 +120,31 @@ class _BreathingScreenState extends State<BreathingScreen> {
     _sessionKey =
         '${widget.pattern.id}:${cnhDateKey(DateTime.now())}:'
         '${DateTime.now().millisecondsSinceEpoch}';
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      setState(() => _engine!.tick());
-      if (_engine!.isDone) _goToCompletion(endedEarly: false);
-    });
+    _lastAdvance = DateTime.now();
+    _timer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _advanceFromClock(),
+    );
+  }
+
+  /// Applies the real elapsed time since the last advance. Runs on
+  /// every timer tick and on return to the foreground; the baseline
+  /// moves even while paused, so paused time never counts later.
+  void _advanceFromClock() {
+    if (!mounted || _engine == null) return;
+    final now = DateTime.now();
+    final elapsed = now.difference(_lastAdvance).inSeconds;
+    if (elapsed <= 0) return;
+    _lastAdvance = _lastAdvance.add(Duration(seconds: elapsed));
+    setState(() => _engine!.advance(elapsed));
+    if (_engine!.isDone) _goToCompletion(endedEarly: false);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _advanceFromClock();
+    }
   }
 
   void _goToCompletion({required bool endedEarly}) {

@@ -94,14 +94,26 @@ class SessionEngine {
 
   /// Advances the session by one second. Only a running work phase
   /// adds to [activeSeconds].
-  void tick() {
-    if (!running || isDone) return;
-    if (phase == SessionPhase.work) {
-      activeSeconds++;
-    }
-    secondsRemaining--;
-    if (secondsRemaining <= 0) {
-      _finishPhase();
+  void tick() => advance(1);
+
+  /// Advances the session by [seconds] at once, crossing as many
+  /// phase boundaries as that spans. Wall-clock catch-up uses this
+  /// after the OS has paused the app (screen off, app backgrounded):
+  /// the elapsed real time is applied in one step, so a session is
+  /// neither stalled nor double-counted. While paused or done,
+  /// nothing advances.
+  void advance(int seconds) {
+    var remaining = seconds;
+    while (remaining > 0 && running && !isDone) {
+      final step = min(remaining, secondsRemaining);
+      if (phase == SessionPhase.work) {
+        activeSeconds += step;
+      }
+      secondsRemaining -= step;
+      remaining -= step;
+      if (secondsRemaining <= 0) {
+        _finishPhase();
+      }
     }
   }
 

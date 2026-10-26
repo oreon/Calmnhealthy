@@ -123,9 +123,18 @@ class BreathingEngine {
   }
 
   /// Advances the session by one second — only while running.
-  void tick() {
-    if (!running || isDone) return;
-    activeSeconds++;
+  void tick() => advance(1);
+
+  /// Advances the session by [seconds] at once — wall-clock
+  /// catch-up after the OS paused the app (e.g. screen off), so
+  /// breathed time is neither lost nor double-counted. Never runs
+  /// past the session's target length.
+  void advance(int seconds) {
+    if (!running || isDone || seconds <= 0) return;
+    activeSeconds += seconds;
+    if (activeSeconds > totalSeconds) {
+      activeSeconds = totalSeconds;
+    }
   }
 
   /// Position within the current cycle, in seconds.

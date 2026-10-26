@@ -30,7 +30,8 @@ class SessionScreen extends StatefulWidget {
   State<SessionScreen> createState() => _SessionScreenState();
 }
 
-class _SessionScreenState extends State<SessionScreen> {
+class _SessionScreenState extends State<SessionScreen>
+    with WidgetsBindingObserver {
   late final SessionEngine _engine;
   late final String _sessionKey;
   late final AudioService _audioService;
@@ -38,9 +39,16 @@ class _SessionScreenState extends State<SessionScreen> {
   Timer? _timer;
   bool _movedToCompletion = false;
 
+  /// Wall-clock moment the engine was last advanced to. The periodic
+  /// timer alone cannot be trusted: Android pauses it while the
+  /// screen is off, so elapsed time is always derived from the clock
+  /// and applied via [SessionEngine.advance].
+  DateTime _lastAdvance = DateTime.now();
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final draft = widget.draft;
     final usingDraft = draft != null && draft.practiceId == widget.practice.id;
     if (usingDraft) {
@@ -58,12 +66,34 @@ class _SessionScreenState extends State<SessionScreen> {
     // not created until play() is called below, and never at startup.
     _audioService = AudioService();
     unawaited(_audioService.play(_audioTrack));
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      setState(() => _engine.tick());
-      _saveDraft();
-      if (_engine.isDone) _goToCompletion(endedEarly: false);
-    });
+    _lastAdvance = DateTime.now();
+    _timer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _advanceFromClock(),
+    );
+  }
+
+  /// Applies the real elapsed time since the last advance to the
+  /// engine. Runs on every timer tick and again when the app returns
+  /// to the foreground, so time spent with the screen off still
+  /// counts exactly once. While the engine is paused the clock
+  /// baseline still moves, so paused time is never dumped in later.
+  void _advanceFromClock() {
+    if (!mounted) return;
+    final now = DateTime.now();
+    final elapsed = now.difference(_lastAdvance).inSeconds;
+    if (elapsed <= 0) return;
+    _lastAdvance = _lastAdvance.add(Duration(seconds: elapsed));
+    setState(() => _engine.advance(elapsed));
+    _saveDraft();
+    if (_engine.isDone) _goToCompletion(endedEarly: false);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _advanceFromClock();
+    }
   }
 
   String? _trackFromDraft(SessionDraft draft) {
@@ -76,6 +106,7 @@ class _SessionScreenState extends State<SessionScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     if (!_movedToCompletion) {
       _saveDraft();

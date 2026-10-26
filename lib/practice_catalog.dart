@@ -120,11 +120,27 @@ const PracticeDefinition strengthUpper = PracticeDefinition(
   title: 'Upper Body',
   kind: PracticeKind.strength,
   steps: [
-    PracticeStep('Pushups', 45),
-    PracticeStep('Plank Ups', 45),
-    PracticeStep('Plank to Dolphin', 45),
-    PracticeStep('Superman', 45),
-    PracticeStep('Plank', 45),
+    PracticeStep(
+      'Pushups',
+      45,
+      imageAsset: 'assets/images/upper/pushups.gif',
+    ),
+    PracticeStep(
+      'Plank Ups',
+      45,
+      imageAsset: 'assets/images/upper/plank_ups.gif',
+    ),
+    PracticeStep(
+      'Plank to Dolphin',
+      45,
+      imageAsset: 'assets/images/upper/plank_to_dolphin.gif',
+    ),
+    PracticeStep(
+      'Superman',
+      45,
+      imageAsset: 'assets/images/upper/superman.webp',
+    ),
+    PracticeStep('Plank', 45, imageAsset: 'assets/images/upper/plank.webp'),
   ],
   sets: 3,
   restSeconds: 15,
