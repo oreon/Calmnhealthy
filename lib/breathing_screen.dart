@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'audio_service.dart';
 import 'breathing.dart';
 import 'completion_screen.dart';
 import 'practice_catalog.dart';
@@ -70,16 +71,24 @@ class BreathingPatternCard extends StatelessWidget {
 /// When [autoStartSeconds] is given, the session starts immediately
 /// at that length with no setup step — the Today 'Before scrolling'
 /// impulse uses this for its 60-second box breathing.
+///
+/// Box breathing plays a short chime each time the phase changes
+/// (and again on resume). The screen used to draw the pacer only:
+/// nothing constructed a player, so the session was silent. Other
+/// patterns, including 4-7-8, stay silent. [cueAudio] lets tests
+/// inject a fake player; production builds one on first start.
 class BreathingScreen extends StatefulWidget {
   final BreathingPattern pattern;
   final int? autoStartSeconds;
   final String? introLine;
+  final AudioService? cueAudio;
 
   const BreathingScreen({
     super.key,
     required this.pattern,
     this.autoStartSeconds,
     this.introLine,
+    this.cueAudio,
   });
 
   @override
@@ -92,6 +101,13 @@ class _BreathingScreenState extends State<BreathingScreen> {
   late String _sessionKey;
   Timer? _timer;
   bool _movedToCompletion = false;
+  AudioService? _cueAudio;
+
+  /// Phase index we already chimed for. Null after a pause so resume
+  /// sounds the phase the user is rejoining.
+  int? _announcedPhase;
+
+  bool get _chimesPhases => widget.pattern.id == boxBreathingPattern.id;
 
   @override
   void initState() {
@@ -103,18 +119,44 @@ class _BreathingScreenState extends State<BreathingScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    unawaited(_cueAudio?.stop());
     super.dispose();
+  }
+
+  void _attachCueAudio() {
+    if (!_chimesPhases) return;
+    _cueAudio ??= widget.cueAudio ?? AudioService.phaseCues();
+  }
+
+  /// Plays the chime once per phase while the clock is running.
+  void _announcePhase() {
+    final engine = _engine;
+    final audio = _cueAudio;
+    if (engine == null || audio == null) return;
+    if (!engine.running || engine.isDone) return;
+    final phase = engine.phaseIndex;
+    if (_announcedPhase == phase) return;
+    _announcedPhase = phase;
+    unawaited(audio.playPhaseChime());
   }
 
   void _start(int totalSeconds) {
     _engine = BreathingEngine(widget.pattern, totalSeconds: totalSeconds);
+    _announcedPhase = null;
     _sessionKey =
         '${widget.pattern.id}:${cnhDateKey(DateTime.now())}:'
         '${DateTime.now().millisecondsSinceEpoch}';
+    _attachCueAudio();
+    _announcePhase();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
-      setState(() => _engine!.tick());
-      if (_engine!.isDone) _goToCompletion(endedEarly: false);
+      final engine = _engine!;
+      setState(() => engine.tick());
+      if (engine.isDone) {
+        _goToCompletion(endedEarly: false);
+      } else {
+        _announcePhase();
+      }
     });
   }
 
@@ -122,6 +164,7 @@ class _BreathingScreenState extends State<BreathingScreen> {
     if (_movedToCompletion) return;
     _movedToCompletion = true;
     _timer?.cancel();
+    unawaited(_cueAudio?.stop());
     final engine = _engine!;
     // The completion moment logs kind from the practice title and
     // practiceId from its id — both are the pattern's, so a saved
@@ -152,6 +195,7 @@ class _BreathingScreenState extends State<BreathingScreen> {
   }
 
   void _endEarly() {
+    unawaited(_cueAudio?.stop());
     if (_engine == null || _engine!.activeSeconds <= 0) {
       // Nothing breathed yet: leave without a log entry.
       Navigator.of(context).pop();
@@ -165,10 +209,14 @@ class _BreathingScreenState extends State<BreathingScreen> {
     setState(() {
       if (engine.running) {
         engine.pause();
+        // Forget the phase so Resume chimes the side we are on.
+        _announcedPhase = null;
+        unawaited(_cueAudio?.stop());
       } else {
         engine.resume();
       }
     });
+    _announcePhase();
   }
 
   @override
@@ -199,8 +247,12 @@ class _BreathingScreenState extends State<BreathingScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Follow the circle: breathe in as it grows, breathe out '
-          'as it shrinks, and rest in the holds between.',
+          _chimesPhases
+              ? 'Follow the circle: breathe in as it grows, breathe out '
+                    'as it shrinks, and rest in the holds between. '
+                    'A soft chime marks each phase.'
+              : 'Follow the circle: breathe in as it grows, breathe out '
+                    'as it shrinks, and rest in the holds between.',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,

@@ -80,18 +80,39 @@ class _TodayScreenState extends State<TodayScreen> {
   List<PlanTask> _tasks = List<PlanTask>.of(seedTasks);
   late final String _todayDoneKey;
 
+  /// Bumped on every local check-off so an in-flight reload cannot
+  /// paint the points from before that tap.
+  int _viewEpoch = 0;
+
+  /// Check-off writes run in order. A slower earlier write must not
+  /// land after a later one and put the old total back.
+  Future<void> _persistQueue = Future<void>.value();
+
   @override
   void initState() {
     super.initState();
     _todayDoneKey = '$_doneKeyPrefix${_dateKey(DateTime.now())}';
     _load();
+    // The shell keeps this tab alive under the others. A session
+    // saved from Exercise or Meditate writes the shared points total
+    // and bumps [SessionStore.changes]; without this listener the
+    // chip stayed stale until the next cold start.
+    SessionStore.changes.addListener(_load);
+  }
+
+  @override
+  void dispose() {
+    SessionStore.changes.removeListener(_load);
+    super.dispose();
   }
 
   Future<void> _load() async {
+    final epoch = _viewEpoch;
+    await _persistQueue;
     final prefs = await SharedPreferences.getInstance();
     final tasks = await PlanStore.loadPlan();
     final profile = await ProfileStore.loadProfile();
-    if (!mounted) return;
+    if (!mounted || epoch != _viewEpoch) return;
     setState(() {
       _tasks = tasks;
       _profile = profile;
@@ -141,7 +162,7 @@ class _TodayScreenState extends State<TodayScreen> {
     );
   }
 
-  Future<void> _toggle(PlanTask task, bool complete) async {
+  void _toggle(PlanTask task, bool complete) {
     final outcome = toggleTask(
       completedIds: _completedIds,
       lifetimePoints: _lifetimePoints,
@@ -152,9 +173,20 @@ class _TodayScreenState extends State<TodayScreen> {
       _completedIds = outcome.completedIds;
       _lifetimePoints = outcome.lifetimePoints;
     });
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_lifetimePointsKey, _lifetimePoints);
-    await prefs.setStringList(_todayDoneKey, _completedIds.toList());
+    _viewEpoch++;
+    final points = _lifetimePoints;
+    final done = List<String>.of(_completedIds);
+    final doneKey = _todayDoneKey;
+    // Serialized so a slow earlier tap cannot overwrite a later one.
+    // A failed write is swallowed here so the next tap still persists;
+    // the in-memory check is already updated.
+    _persistQueue = _persistQueue
+        .then((_) async {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setInt(_lifetimePointsKey, points);
+          await prefs.setStringList(doneKey, done);
+        })
+        .catchError((Object _) {});
   }
 
   void _showMilestone3(String title, String message) {
@@ -308,7 +340,9 @@ class _TodayScreenState extends State<TodayScreen> {
 
   void _onReorder(int oldIndex, int newIndex) {
     // ReorderableListView indexes the displayed (time-sorted) list;
-    // the result becomes the stored manual order.
+    // the result becomes the stored manual order. The legacy
+    // onReorder callback reports newIndex as if the item were still
+    // in the list, so a downward move needs the extra step removed.
     final display = sortedPlan(_tasks);
     var target = newIndex;
     if (target > oldIndex) target -= 1;
@@ -600,6 +634,10 @@ class _TodayScreenState extends State<TodayScreen> {
         Expanded(
           child: ReorderableListView.builder(
             itemCount: display.length,
+            // onReorderItem (Flutter 3.41+) adjusts newIndex itself.
+            // This app still uses onReorder so the index math below,
+            // and older SDKs allowed by the pubspec, keep working.
+            // ignore: deprecated_member_use
             onReorder: _onReorder,
             itemBuilder: (context, index) =>
                 _buildEditRow(theme, display[index], index),

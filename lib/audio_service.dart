@@ -21,14 +21,29 @@ abstract interface class AudioBackend {
 /// audioplayers-backed implementation. Its [AudioPlayer] is created
 /// lazily by the first play request; pause/resume/stop before any
 /// playback therefore do not create a player at all.
+///
+/// [playerMode] stays on the media player for long session tracks.
+/// Box-breathing phase cues pass [PlayerMode.lowLatency] so Android
+/// plays the short chime through SoundPool instead of spinning up a
+/// media player on every phase.
 class AudioplayersBackend implements AudioBackend {
+  AudioplayersBackend({this.playerMode = PlayerMode.mediaPlayer});
+
+  final PlayerMode playerMode;
   AudioPlayer? _player;
 
   AudioPlayer get _ensurePlayer => _player ??= AudioPlayer();
 
   @override
   Future<void> play(String track) async {
-    await _ensurePlayer.play(AssetSource(track));
+    final player = _ensurePlayer;
+    // Long tracks keep the default media player. Phase cues opt into
+    // low latency, which audioplayers applies at play time.
+    if (playerMode == PlayerMode.lowLatency) {
+      await player.play(AssetSource(track), mode: PlayerMode.lowLatency);
+    } else {
+      await player.play(AssetSource(track));
+    }
   }
 
   @override
@@ -55,12 +70,23 @@ class AudioService {
   /// Bundled bell played once when a completion screen appears.
   static const String completionBellTrack = 'sounds/tibet_bell.wav';
 
+  /// Short chime played at each box-breathing phase change.
+  /// Relative to `assets/`, like every other track.
+  static const String phaseChimeTrack = 'sounds/phase_chime.wav';
+
   final AudioBackend _backend;
   bool _isPlaying = false;
   String? _currentTrack;
 
   AudioService({AudioBackend? backend})
     : _backend = backend ?? AudioplayersBackend();
+
+  /// Cue player for box breathing. Low-latency on Android so a
+  /// one-shot wav starts with the phase instead of waiting on the
+  /// media player. Tests pass [backend] and never touch the platform.
+  factory AudioService.phaseCues({AudioBackend? backend}) => AudioService(
+    backend: backend ?? AudioplayersBackend(playerMode: PlayerMode.lowLatency),
+  );
 
   /// Whether the most recent guarded playback operation left audio
   /// playing. Any backend error reports false.
@@ -90,6 +116,13 @@ class AudioService {
 
   /// Plays the completion bell once, with the same failure guard.
   Future<void> playCompletionBell() => play(completionBellTrack);
+
+  /// Restarts the phase chime from the beginning. Stopping first
+  /// matters when the previous cue is still ringing.
+  Future<void> playPhaseChime() async {
+    await stop();
+    await play(phaseChimeTrack);
+  }
 
   Future<void> pause() async {
     try {
