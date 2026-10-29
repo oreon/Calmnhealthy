@@ -130,6 +130,14 @@ void main() {
         }
       }
       paths.add('assets/${AudioService.completionBellTrack}');
+      paths.add('assets/${AudioService.phaseChimeTrack}');
+
+      final chime = File('assets/${AudioService.phaseChimeTrack}');
+      expect(
+        String.fromCharCodes(chime.readAsBytesSync().take(4)),
+        'RIFF',
+        reason: 'phase chime must be a real wav, not an empty placeholder',
+      );
 
       for (final path in paths) {
         expect(File(path).existsSync(), isTrue, reason: path);

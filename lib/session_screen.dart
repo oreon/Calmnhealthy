@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 
 import 'audio_service.dart';
@@ -43,7 +44,7 @@ class _SessionScreenState extends State<SessionScreen>
   /// timer alone cannot be trusted: Android pauses it while the
   /// screen is off, so elapsed time is always derived from the clock
   /// and applied via [SessionEngine.advance].
-  DateTime _lastAdvance = DateTime.now();
+  DateTime _lastAdvance = clock.now();
 
   @override
   void initState() {
@@ -66,7 +67,7 @@ class _SessionScreenState extends State<SessionScreen>
     // not created until play() is called below, and never at startup.
     _audioService = AudioService();
     unawaited(_audioService.play(_audioTrack));
-    _lastAdvance = DateTime.now();
+    _lastAdvance = clock.now();
     _timer = Timer.periodic(
       const Duration(seconds: 1),
       (_) => _advanceFromClock(),
@@ -80,7 +81,7 @@ class _SessionScreenState extends State<SessionScreen>
   /// baseline still moves, so paused time is never dumped in later.
   void _advanceFromClock() {
     if (!mounted) return;
-    final now = DateTime.now();
+    final now = clock.now();
     final elapsed = now.difference(_lastAdvance).inSeconds;
     if (elapsed <= 0) return;
     _lastAdvance = _lastAdvance.add(Duration(seconds: elapsed));

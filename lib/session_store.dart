@@ -47,7 +47,12 @@ class SessionLogEntry {
   });
 
   /// The 'yyyy-MM-dd' day this entry belongs to.
-  String get dateKey => timestamp.substring(0, 10);
+  ///
+  /// Empty when [timestamp] is too short to hold a date. Stored rows
+  /// that fail [_hasDatePrefix] never become entries, so a normal
+  /// log row always has a 10-character date here.
+  String get dateKey =>
+      timestamp.length >= 10 ? timestamp.substring(0, 10) : '';
 
   /// Whole active minutes, for compact display.
   int get activeMinutes => activeSeconds ~/ 60;
@@ -62,23 +67,78 @@ class SessionLogEntry {
     'reflection': reflection,
   };
 
+  /// Decodes one stored object. Returns null when the row is damaged
+  /// (missing the required strings, a timestamp that is not a calendar
+  /// day, or a field of the wrong JSON type) so the caller can count
+  /// it without dropping the neighbouring rows.
   static SessionLogEntry? tryFromJson(Map<String, dynamic> json) {
-    final timestamp = json['timestamp'] as String?;
-    final kind = json['kind'] as String?;
-    if (timestamp == null || kind == null) return null;
+    final timestamp = json['timestamp'];
+    final kind = json['kind'];
+    if (timestamp is! String || kind is! String) return null;
+    if (!_hasDatePrefix(timestamp)) return null;
+    final practiceId = _optionalString(json['practice_id']);
+    final feeling = _optionalString(json['feeling']);
+    final reflection = _optionalString(json['reflection']);
+    final activeSeconds = _optionalInt(json['active_seconds']);
+    final points = _optionalInt(json['points']);
+    if (practiceId == null ||
+        feeling == null ||
+        reflection == null ||
+        activeSeconds == null ||
+        points == null) {
+      return null;
+    }
     return SessionLogEntry(
       timestamp: timestamp,
       kind: kind,
-      practiceId: json['practice_id'] as String? ?? '',
-      activeSeconds: (json['active_seconds'] as num?)?.toInt() ?? 0,
-      points: (json['points'] as num?)?.toInt() ?? 0,
-      feeling: json['feeling'] as String? ?? '',
-      reflection: json['reflection'] as String? ?? '',
+      practiceId: practiceId,
+      activeSeconds: activeSeconds,
+      points: points,
+      feeling: feeling,
+      reflection: reflection,
     );
+  }
+
+  /// True when [timestamp] begins with a 'yyyy-MM-dd' calendar day.
+  static bool _hasDatePrefix(String timestamp) {
+    if (timestamp.length < 10) return false;
+    for (var i = 0; i < 10; i++) {
+      final code = timestamp.codeUnitAt(i);
+      final dashSlot = i == 4 || i == 7;
+      final isDigit = code >= 0x30 && code <= 0x39;
+      if (dashSlot) {
+        if (code != 0x2d) return false;
+      } else if (!isDigit) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /// Missing optional strings default to ''. A present non-string is
+  /// damage, reported as null so the whole row is skipped.
+  static String? _optionalString(Object? value) {
+    if (value == null) return '';
+    if (value is String) return value;
+    return null;
+  }
+
+  /// Missing optional numbers default to 0. A present non-number is
+  /// damage, reported as null so the whole row is skipped.
+  static int? _optionalInt(Object? value) {
+    if (value == null) return 0;
+    if (value is num) return value.toInt();
+    return null;
   }
 }
 
 /// Reads and writes the session records.
+///
+/// The completion log is decoded once and kept in memory until
+/// [completeSession] writes a new row. Reading another day, or
+/// reading the same day again, does not parse the stored JSON a
+/// second time. Damaged rows stay in storage; they are counted and
+/// reported, never deleted.
 class SessionStore {
   /// Shared with the Today tab — do not rename.
   static const String lifetimePointsKey = 'cnh.lifetime_points';
@@ -89,6 +149,29 @@ class SessionStore {
   /// Bumped whenever session records change, so open tabs (e.g. the
   /// Log) can refresh themselves.
   static final ValueNotifier<int> changes = ValueNotifier<int>(0);
+
+  static _DecodedLog? _cachedLog;
+  static int _logGeneration = 0;
+
+  /// How many times the stored log has actually been JSON-decoded.
+  /// Tests use this to prove repeat reads hit the memory cache.
+  @visibleForTesting
+  static int debugDecodeCount = 0;
+
+  /// Drops the in-memory log so the next read decodes storage again.
+  /// Production code invalidates itself inside [completeSession];
+  /// tests call this between cases that replace SharedPreferences.
+  @visibleForTesting
+  static void debugResetCache() {
+    _logGeneration++;
+    _cachedLog = null;
+    debugDecodeCount = 0;
+  }
+
+  static void _invalidateLogCache() {
+    _logGeneration++;
+    _cachedLog = null;
+  }
 
   static void _bump() => changes.value++;
 
@@ -150,9 +233,15 @@ class SessionStore {
     final lifetime = prefs.getInt(lifetimePointsKey) ?? 0;
     await prefs.setInt(lifetimePointsKey, lifetime + entry.points);
 
-    final log = prefs.getStringList(logKey) ?? <String>[];
+    // Copy first: getStringList can hand back a live view of the
+    // stored list, and the previous rows (including damaged ones)
+    // must be written back unchanged.
+    final log = List<String>.of(
+      prefs.getStringList(logKey) ?? const <String>[],
+    );
     log.add(jsonEncode(entry.toJson()));
     await prefs.setStringList(logKey, log);
+    _invalidateLogCache();
 
     final draft = await loadDraft(entry.dateKey);
     if (draft != null && draft.sessionKey == sessionKey) {
@@ -162,21 +251,89 @@ class SessionStore {
     return entry.points;
   }
 
-  /// All log entries for one 'yyyy-MM-dd' day, oldest first.
+  /// All readable log entries for one 'yyyy-MM-dd' day, oldest first.
+  ///
+  /// Damaged rows are left in storage. They are not part of this
+  /// list; [unreadableLogEntries] counts them.
   static Future<List<SessionLogEntry>> logForDate(String dateKey) async {
+    final decoded = await _decodedLog();
+    return [
+      for (final entry in decoded.entries)
+        if (entry.dateKey == dateKey) entry,
+    ];
+  }
+
+  /// How many stored rows could not be decoded the last time the log
+  /// was read. Valid rows are never removed to "fix" this count.
+  static Future<int> unreadableLogEntries() async {
+    final decoded = await _decodedLog();
+    return decoded.unreadableCount;
+  }
+
+  static Future<_DecodedLog> _decodedLog() async {
+    final cached = _cachedLog;
+    if (cached != null) return cached;
+    final generation = _logGeneration;
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getStringList(logKey) ?? <String>[];
+    // A completion may have landed while we waited for prefs. Don't
+    // cache the stale read; load again.
+    if (generation != _logGeneration) return _decodedLog();
+    final raw = prefs.getStringList(logKey) ?? const <String>[];
+    if (generation != _logGeneration) return _decodedLog();
+    final decoded = _decodeLog(raw);
+    if (generation != _logGeneration) return _decodedLog();
+    _cachedLog = decoded;
+    return decoded;
+  }
+
+  static _DecodedLog _decodeLog(List<String> raw) {
+    debugDecodeCount++;
     final entries = <SessionLogEntry>[];
+    var unreadable = 0;
     for (final item in raw) {
-      try {
-        final entry = SessionLogEntry.tryFromJson(
-          jsonDecode(item) as Map<String, dynamic>,
-        );
-        if (entry != null && entry.dateKey == dateKey) entries.add(entry);
-      } catch (_) {
-        // Skip unreadable rows rather than breaking the whole log.
+      final entry = _tryDecodeStoredRow(item);
+      if (entry == null) {
+        unreadable++;
+      } else {
+        entries.add(entry);
       }
     }
-    return entries;
+    return _DecodedLog(entries, unreadable);
   }
+
+  /// One stored string to an entry, or null when the row is damaged.
+  /// Never throws: a bad row must not fail the rest of the log.
+  static SessionLogEntry? _tryDecodeStoredRow(String item) {
+    try {
+      final decoded = jsonDecode(item);
+      if (decoded is! Map) {
+        _logUnreadable('expected a JSON object');
+        return null;
+      }
+      final entry = SessionLogEntry.tryFromJson(
+        Map<String, dynamic>.from(decoded),
+      );
+      if (entry == null) {
+        _logUnreadable('missing a usable timestamp and kind');
+        return null;
+      }
+      return entry;
+    } catch (error) {
+      _logUnreadable(error);
+      return null;
+    }
+  }
+
+  static void _logUnreadable(Object reason) {
+    if (kDebugMode) {
+      debugPrint('SessionStore: skipped unreadable log entry: $reason');
+    }
+  }
+}
+
+class _DecodedLog {
+  final List<SessionLogEntry> entries;
+  final int unreadableCount;
+
+  const _DecodedLog(this.entries, this.unreadableCount);
 }

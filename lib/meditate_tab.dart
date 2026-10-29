@@ -20,6 +20,11 @@ class _MeditateTabState extends State<MeditateTab> {
   int _selectedTrackIndex = 0;
   SessionDraft? _draft;
 
+  /// Draft id we already aligned the chips to. Repeat loads of the
+  /// same draft (the session saves every second) must not snap a
+  /// chip the user has since changed.
+  String? _alignedDraftId;
+
   @override
   void initState() {
     super.initState();
@@ -36,7 +41,36 @@ class _MeditateTabState extends State<MeditateTab> {
   Future<void> _loadDraft() async {
     final draft = await SessionStore.loadDraft(cnhDateKey(DateTime.now()));
     if (!mounted) return;
-    setState(() => _draft = draft);
+    setState(() {
+      _draft = draft;
+      _alignSelectionWithDraft(draft);
+    });
+  }
+
+  /// The length chips default to 10 minutes. An unfinished 20-minute
+  /// sit was stored under 'meditation-20', so the card offered Start
+  /// instead of Resume and the next Start overwrote that draft.
+  /// Align the chips once per draft so Resume is what the user sees.
+  void _alignSelectionWithDraft(SessionDraft? draft) {
+    final id = draft?.practiceId;
+    if (id == null) {
+      _alignedDraftId = null;
+      return;
+    }
+    if (id == _alignedDraftId) return;
+    _alignedDraftId = id;
+    const prefix = 'meditation-';
+    if (!id.startsWith(prefix)) return;
+    final minutes = int.tryParse(id.substring(prefix.length));
+    if (minutes != null && meditationPresetMinutes.contains(minutes)) {
+      _selectedMinutes = minutes;
+    }
+    final track = draft!.audioTrack;
+    final index = guidedTrackOptions.indexWhere((option) {
+      if (track == null || track.isEmpty) return option.audioTrack == null;
+      return option.audioTrack == track;
+    });
+    if (index >= 0) _selectedTrackIndex = index;
   }
 
   @override

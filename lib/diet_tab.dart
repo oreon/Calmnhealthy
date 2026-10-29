@@ -18,6 +18,10 @@ class _DietTabState extends State<DietTab> {
   int _selectedMinutes = 10;
   SessionDraft? _draft;
 
+  /// See [_alignSelectionWithDraft]. Same idea as the Meditate tab:
+  /// don't re-apply a draft the user has already been shown.
+  String? _alignedDraftId;
+
   @override
   void initState() {
     super.initState();
@@ -34,7 +38,29 @@ class _DietTabState extends State<DietTab> {
   Future<void> _loadDraft() async {
     final draft = await SessionStore.loadDraft(cnhDateKey(DateTime.now()));
     if (!mounted) return;
-    setState(() => _draft = draft);
+    setState(() {
+      _draft = draft;
+      _alignSelectionWithDraft(draft);
+    });
+  }
+
+  /// Mindful-eating drafts are keyed by length ('mindful-eating-15').
+  /// The card defaults to 10 minutes, which hid Resume and let the
+  /// next Start replace the unfinished session.
+  void _alignSelectionWithDraft(SessionDraft? draft) {
+    final id = draft?.practiceId;
+    if (id == null) {
+      _alignedDraftId = null;
+      return;
+    }
+    if (id == _alignedDraftId) return;
+    _alignedDraftId = id;
+    const prefix = 'mindful-eating-';
+    if (!id.startsWith(prefix)) return;
+    final minutes = int.tryParse(id.substring(prefix.length));
+    if (minutes != null && mindfulEatingPresetMinutes.contains(minutes)) {
+      _selectedMinutes = minutes;
+    }
   }
 
   @override
